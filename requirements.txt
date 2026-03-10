@@ -1,0 +1,22 @@
+# PyTorch - install separately with CUDA version matching your environment
+# CUDA 12.4: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+
+# Core dependencies
+numpy==2.4.0
+Pillow==12.0.0
+PyYAML==6.0.3
+tqdm==4.67.1
+scipy==1.17.1
+
+# Image quality metrics
+lpips==0.1.4
+scikit-image==0.26.0
+
+# Analysis & visualization
+matplotlib==3.10.8
+pandas==3.0.1
+
+# Utilities
+gdown==5.2.1

@@ -1,5 +1,5 @@
 Denoising_steps: 10
-Optimization_steps: 100
+Optimization_steps: 1000
 lr_blur: 0.0002
 lr_img: 0.003 #0.003
 delta_t: 100

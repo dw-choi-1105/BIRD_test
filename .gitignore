@@ -1,0 +1,10 @@
+checkpoints/
+__pycache__/
+*.pyc
+*.pth
+*.ckpt
+results/blind_deblurring_freq/
+results/blind_deblurring_freq_iter/
+results/blind_deblurring_iter/
+results/blind_deblurring_step20_iter/
+results/normality_analysis.png
