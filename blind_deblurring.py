@@ -38,16 +38,16 @@ ddim_scheduler.set_timesteps(config.diffusion.num_diffusion_timesteps // task_co
 
 #scale=41
 l2_loss= nn.MSELoss() #nn.L1Loss()
-net_kernel = fcn(200, task_config['kernel_size'] * task_config['kernel_size']).cuda()
-net_input_kernel = get_noise(200, 'noise', (1, 1)).cuda()
-net_input_kernel.squeeze_()
 
+### Fixed kernel from kernel.npy
+fixed_kernel_np = np.load('data/kernel.npy').astype(np.float32)  # (41, 41)
+fixed_kernel = torch.tensor(fixed_kernel_np).view(1, 1, task_config['kernel_size'], task_config['kernel_size']).cuda()
 
 img_pil, downsampled_torch = generate_blurry_image('data/imgs/00287.png')
 radii =  torch.ones([1, 1, 1]).cuda() * (np.sqrt(256*256*3))
 
 latent = torch.nn.parameter.Parameter(torch.randn( 1, config.model.in_channels, config.data.image_size, config.data.image_size).to(device))
-optimizer = torch.optim.Adam([{'params':latent,'lr':task_config['lr_img']}, {'params':net_kernel.parameters(),'lr':task_config['lr_blur']}])
+optimizer = torch.optim.Adam([{'params':latent,'lr':task_config['lr_img']}])
 
 ### Metric setup
 lpips_fn = lpips.LPIPS(net='alex').to(device)
@@ -55,9 +55,9 @@ lpips_fn.eval()
 gt_np = np.array(img_pil).astype(np.float32)  # HQ ground truth (0~255)
 
 ### Output directories
-os.makedirs('results/blind_deblurring_imgfreq_iter', exist_ok=True)
-os.makedirs('results/blind_deblurring_imgfreq', exist_ok=True)
-metrics_path = 'results/blind_deblurring_imgfreq_metrics.csv'
+os.makedirs('results/blind_deblurring_fixedkernel_iter', exist_ok=True)
+os.makedirs('results/blind_deblurring_fixedkernel_freq', exist_ok=True)
+metrics_path = 'results/blind_deblurring_fixedkernel_metrics.csv'
 with open(metrics_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
@@ -151,10 +151,8 @@ def compute_band_powers(latent_np):
 for iteration in range(task_config['Optimization_steps']):
     optimizer.zero_grad()
     x_0_hat = DDIM_efficient_feed_forward(latent, model, ddim_scheduler)
-    out_k = net_kernel(net_input_kernel)
-    out_k_m = out_k.view(-1, 1, task_config['kernel_size'], task_config['kernel_size'])
 
-    blurred_xt = nn.functional.conv2d(x_0_hat.view(-1, 1, config.data.image_size, config.data.image_size), out_k_m, padding="same", bias=None).view(1, 3, config.data.image_size, config.data.image_size)
+    blurred_xt = nn.functional.conv2d(x_0_hat.view(-1, 1, config.data.image_size, config.data.image_size), fixed_kernel, padding="same", bias=None).view(1, 3, config.data.image_size, config.data.image_size)
     loss = l2_loss(blurred_xt, downsampled_torch)
     loss.backward()
     optimizer.step()
@@ -196,11 +194,11 @@ for iteration in range(task_config['Optimization_steps']):
         print(f'iter {iteration:4d} | loss: {loss.item():.6f} | PSNR: {psnr_val:.2f} | SSIM: {ssim_val:.4f} | KS_p: {lat_ks_p:.4f} | lat lo/hi: {low_p:.4f}/{high_p:.4f} | img lo/hi: {low_i:.4f}/{high_i:.4f}')
 
         # 중간 결과 이미지 저장
-        Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save(f'results/blind_deblurring_imgfreq_iter/iter_{iteration:04d}.png')
+        Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save(f'results/blind_deblurring_fixedkernel_iter/iter_{iteration:04d}.png')
         Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save('results/blind_deblurring.png')
 
         # 주파수 스펙트럼 이미지 저장
-        save_latent_freq_image(latent_np, iteration, 'results/blind_deblurring_imgfreq')
+        save_latent_freq_image(latent_np, iteration, 'results/blind_deblurring_fixedkernel_freq')
 
         # 메트릭 CSV 저장
         with open(metrics_path, 'a', newline='') as f:
