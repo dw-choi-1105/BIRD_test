@@ -55,9 +55,9 @@ lpips_fn.eval()
 gt_np = np.array(img_pil).astype(np.float32)  # HQ ground truth (0~255)
 
 ### Output directories
-os.makedirs('results/blind_deblurring_freq_iter', exist_ok=True)
-os.makedirs('results/blind_deblurring_freq', exist_ok=True)
-metrics_path = 'results/blind_deblurring_freq_metrics.csv'
+os.makedirs('results/blind_deblurring_imgfreq_iter', exist_ok=True)
+os.makedirs('results/blind_deblurring_imgfreq', exist_ok=True)
+metrics_path = 'results/blind_deblurring_imgfreq_metrics.csv'
 with open(metrics_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
@@ -65,6 +65,7 @@ with open(metrics_path, 'w', newline='') as f:
         'latent_ks_stat', 'latent_ks_p',
         'latent_sw_stat', 'latent_sw_p',
         'freq_low_frac', 'freq_mid_frac', 'freq_high_frac',
+        'img_low_frac', 'img_mid_frac', 'img_high_frac',
     ])
 
 
@@ -107,9 +108,9 @@ def save_latent_freq_image(latent_np, iteration, save_dir):
 
     # 저주파 / 중주파 / 고주파 영역 표시
     r_max = max_r
-    ax.axvspan(0, r_max * 0.15, alpha=0.08, color='blue', label='Low freq')
-    ax.axvspan(r_max * 0.15, r_max * 0.5, alpha=0.08, color='green', label='Mid freq')
-    ax.axvspan(r_max * 0.5, r_max, alpha=0.08, color='red', label='High freq')
+    ax.axvspan(0, r_max * 0.1, alpha=0.08, color='blue', label='Low freq')
+    ax.axvspan(r_max * 0.1, r_max * 0.3, alpha=0.08, color='green', label='Mid freq')
+    ax.axvspan(r_max * 0.3, r_max, alpha=0.08, color='red', label='High freq')
 
     ax.set_xlabel('Radial frequency (pixels from DC)')
     ax.set_ylabel('Log magnitude (avg)')
@@ -131,9 +132,9 @@ def compute_band_powers(latent_np):
     r = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
     r_max = np.sqrt(cx ** 2 + cy ** 2)
 
-    low_mask = r < r_max * 0.15
-    mid_mask = (r >= r_max * 0.15) & (r < r_max * 0.5)
-    high_mask = r >= r_max * 0.5
+    low_mask = r < r_max * 0.1
+    mid_mask = (r >= r_max * 0.1) & (r < r_max * 0.3)
+    high_mask = r >= r_max * 0.3
 
     low_e, mid_e, high_e = 0.0, 0.0, 0.0
     for ch in lat:
@@ -185,17 +186,21 @@ for iteration in range(task_config['Optimization_steps']):
         lat_ks_stat, lat_ks_p = stats.kstest(latent_std, 'norm')
         lat_sw_stat, lat_sw_p = stats.shapiro(latent_std[:5000])
 
-        # 주파수 대역별 power
+        # latent 주파수 대역별 에너지 비율
         low_p, mid_p, high_p = compute_band_powers(latent_np)
 
-        print(f'iter {iteration:4d} | loss: {loss.item():.6f} | PSNR: {psnr_val:.2f} | SSIM: {ssim_val:.4f} | LPIPS: {lpips_val:.4f} | KS_p: {lat_ks_p:.4f} | lo/mid/hi: {low_p:.4f}/{mid_p:.4f}/{high_p:.4f}')
+        # 복원 이미지(x_0_hat) 주파수 대역별 에너지 비율
+        img_np_freq = x_0_hat.detach().cpu().numpy()  # (1, 3, 256, 256)
+        low_i, mid_i, high_i = compute_band_powers(img_np_freq)
+
+        print(f'iter {iteration:4d} | loss: {loss.item():.6f} | PSNR: {psnr_val:.2f} | SSIM: {ssim_val:.4f} | KS_p: {lat_ks_p:.4f} | lat lo/hi: {low_p:.4f}/{high_p:.4f} | img lo/hi: {low_i:.4f}/{high_i:.4f}')
 
         # 중간 결과 이미지 저장
-        Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save(f'results/blind_deblurring_freq_iter/iter_{iteration:04d}.png')
+        Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save(f'results/blind_deblurring_imgfreq_iter/iter_{iteration:04d}.png')
         Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save('results/blind_deblurring.png')
 
         # 주파수 스펙트럼 이미지 저장
-        save_latent_freq_image(latent_np, iteration, 'results/blind_deblurring_freq')
+        save_latent_freq_image(latent_np, iteration, 'results/blind_deblurring_imgfreq')
 
         # 메트릭 CSV 저장
         with open(metrics_path, 'a', newline='') as f:
@@ -205,5 +210,6 @@ for iteration in range(task_config['Optimization_steps']):
                 f'{psnr_val:.4f}', f'{ssim_val:.4f}', f'{lpips_val:.4f}', f'{loss.item():.6f}',
                 f'{lat_ks_stat:.4f}', f'{lat_ks_p:.4f}',
                 f'{lat_sw_stat:.4f}', f'{lat_sw_p:.4f}',
-                f'{low_p:.4f}', f'{mid_p:.4f}', f'{high_p:.4f}',
+                f'{low_p:.6f}', f'{mid_p:.6f}', f'{high_p:.6f}',
+                f'{low_i:.6f}', f'{mid_i:.6f}', f'{high_i:.6f}',
             ])
