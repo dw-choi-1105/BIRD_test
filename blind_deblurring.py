@@ -55,9 +55,9 @@ lpips_fn.eval()
 gt_np = np.array(img_pil).astype(np.float32)  # HQ ground truth (0~255)
 
 ### Output directories
-os.makedirs('results/blind_deblurring_fixedkernel_iter', exist_ok=True)
-os.makedirs('results/blind_deblurring_fixedkernel_freq', exist_ok=True)
-metrics_path = 'results/blind_deblurring_fixedkernel_metrics.csv'
+os.makedirs('results/blind_deblurring_fixedkernel_iter_ori', exist_ok=True)
+os.makedirs('results/blind_deblurring_fixedkernel_freq_ori', exist_ok=True)
+metrics_path = 'results/blind_deblurring_fixedkernel_metrics_ori.csv'
 with open(metrics_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
@@ -194,11 +194,11 @@ for iteration in range(task_config['Optimization_steps']):
         print(f'iter {iteration:4d} | loss: {loss.item():.6f} | PSNR: {psnr_val:.2f} | SSIM: {ssim_val:.4f} | KS_p: {lat_ks_p:.4f} | lat lo/hi: {low_p:.4f}/{high_p:.4f} | img lo/hi: {low_i:.4f}/{high_i:.4f}')
 
         # 중간 결과 이미지 저장
-        Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save(f'results/blind_deblurring_fixedkernel_iter/iter_{iteration:04d}.png')
+        Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save(f'results/blind_deblurring_fixedkernel_iter_ori/iter_{iteration:04d}.png')
         Image.fromarray(np.concatenate([process(downsampled_torch, 0), restored_np.astype(np.uint8), gt_np.astype(np.uint8)], 1)).save('results/blind_deblurring.png')
 
         # 주파수 스펙트럼 이미지 저장
-        save_latent_freq_image(latent_np, iteration, 'results/blind_deblurring_fixedkernel_freq')
+        save_latent_freq_image(latent_np, iteration, 'results/blind_deblurring_fixedkernel_freq_ori')
 
         # 메트릭 CSV 저장
         with open(metrics_path, 'a', newline='') as f:
